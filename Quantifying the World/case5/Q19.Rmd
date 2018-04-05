@@ -1,0 +1,194 @@
+---
+title: "Q19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(RColorBrewer)
+```
+
+  First we will look at the effect of changing the minSplit argument of rpart.control().  minSplit determines how many observations there are at a node before a split can be made. In order to test a wide range of values the numbers between 0 and 10 are tested, every tenth number from 20 to 100, and every hundredth number from 100 to 1000 are passed as arguments.
+```{r minsplit}
+#T1 Error Rate
+predsForHam = predictions[ testDF$isSpam == "F" ]
+summary(predsForHam)
+sum(predsForHam == "T") / length(predsForHam)
+
+#TII Error Rate
+predsForSpam = predictions[ testDF$isSpam == "T" ]
+sum(predsForSpam == "F") / length(predsForSpam)
+
+minSplitBest = c(seq(0,10,by = 1),
+                 seq(20,100, by=10),
+                 seq(100,1000, by=100))
+
+fits = lapply(minSplitBest, function(x) {
+  rpartObj = rpart(isSpam ~ ., data = trainDF,
+                   method="class", 
+                   control = rpart.control(minsplit = x))
+  
+  predict(rpartObj, 
+          newdata = testDF[ , names(testDF) != "isSpam"],
+          type = "class")
+})
+
+spam = testDF$isSpam == "T"
+numSpam = sum(spam)
+numHam = sum(!spam)
+errs = sapply(fits, function(preds) {
+  typeI = sum(preds[ !spam ] == "T") / numHam
+  typeII = sum(preds[ spam ] == "F") / numSpam
+  c(typeI = typeI, typeII = typeII)
+})
+
+
+pdf("minSplitTypeIandII.pdf", width = 8, height = 7)
+
+cols = brewer.pal(9, "Set1")[c(3, 4, 5)]
+plot(errs[1,] ~ minSplitBest, type="l", col=cols[2], 
+     lwd = 2, ylim = c(0,0.4), xlim = c(0,1000), 
+     ylab="Error", xlab="minSplit Values")
+points(errs[2,] ~ minSplitBest, type="l", col=cols[1], lwd = 2)
+
+text(x =c(100, 150), y = c(0.12, 0.03), 
+     labels=c("Type II Error", "Type I Error"))
+
+minI = which(errs[1,] == min(errs[1,]))[1]
+abline(v = minSplitBest[minI], col ="grey", lty =3, lwd=2)
+
+text(0.0007, errs[1, minI]+0.01, 
+     formatC(errs[1, minI], digits = 2))
+text(0.0007, errs[2, minI]+0.01, 
+     formatC(errs[2, minI], digits = 3))
+dev.off()
+```
+  The plot shows that a lower value of minSplit performs the best; producing a Type I error rate of 0.054 and a Type II rate of 0.156.  Both rates rapidly rise at values above 100 with type II being especially dramatic.  The type II rate does come back down at 700 where it coincides with the highest Type I rate.  Since the default minSplit value is 20, and the rate is the same for all numbers below 100, there appears to be no reason to change it. The structure of the tree will therefore be unchanged.
+
+
+  Next we will test minBucket in the same way as we did with minSplit.  MinBucket sets the minimum number of observations there needs to be in a terminal node.   
+```{r minBucket}
+#T1 Error Rate
+predsForHam = predictions[ testDF$isSpam == "F" ]
+summary(predsForHam)
+sum(predsForHam == "T") / length(predsForHam)
+
+#TII Error Rate
+predsForSpam = predictions[ testDF$isSpam == "T" ]
+sum(predsForSpam == "F") / length(predsForSpam)
+
+minBucketBest = c(seq(0,10,by = 1),
+                 seq(20,100, by=10),
+                 seq(100,1000, by=100))
+
+fits = lapply(minBucketBest, function(x) {
+  rpartObj = rpart(isSpam ~ ., data = trainDF,
+                   method="class", 
+                   control = rpart.control(minbucket = x))
+  
+  predict(rpartObj, 
+          newdata = testDF[ , names(testDF) != "isSpam"],
+          type = "class")
+})
+
+spam = testDF$isSpam == "T"
+numSpam = sum(spam)
+numHam = sum(!spam)
+errs = sapply(fits, function(preds) {
+  typeI = sum(preds[ !spam ] == "T") / numHam
+  typeII = sum(preds[ spam ] == "F") / numSpam
+  c(typeI = typeI, typeII = typeII)
+})
+
+
+pdf("minBucketIandII.pdf", width = 8, height = 7)
+
+cols = brewer.pal(9, "Set1")[c(3, 4, 5)]
+plot(errs[1,] ~ minBucketBest, type="l", col=cols[2], 
+     lwd = 2, ylim = c(0,0.4), xlim = c(0,1000), 
+     ylab="Error", xlab="minBucket Values")
+points(errs[2,] ~ minBucketBest, type="l", col=cols[1], lwd = 2)
+
+text(x =c(100, 150), y = c(0.12, 0.01), 
+     labels=c("Type II Error", "Type I Error"))
+
+minI = which(errs[1,] == min(errs[1,]))[1]
+abline(v = minBucketBest[minI], col ="grey", lty =3, lwd=2)
+
+text(0.0007, errs[1, minI]+0.01, 
+     formatC(errs[1, minI], digits = 2))
+text(0.0007, errs[2, minI]+0.01, 
+     formatC(errs[2, minI], digits = 3))
+dev.off()
+```
+  This time we see that the Type I error rate is best at 800, however the type II rate is far too high to be acceptable.  Just to see what effect this has on the tree though we will vizualize the tree with minBucket set to 800.
+```{r minBucket Tree}
+#Fit then training data tree model
+rpartFit = rpart(isSpam ~ ., data = trainDF, method = "class", control = rpart.control(minbucket = 800))
+
+#Plot Training Decision Tree 
+prp(rpartFit, extra = 1)
+pdf("minBucketTree.pdf", width = 7, height = 7)
+prp(rpartFit, extra = 1)
+dev.off()
+
+
+predictions = predict(rpartFit, 
+                      newdata = testDF[, names(testDF) != "isSpam"],
+                      type = "class")
+```
+  Using such a high number for minBucket results in the tree being reduced to just checking the percentage of capital letters and marking as spam based only on that criteria.  This explains the extreme Type II rate.  Clearly it is best to stick to the default as the rate for both Type I and II are acceptable.
+  
+  Finally we will look at the maxDepth value which controls how many levels the tree can have.  Here we will check each number from 1 to 30 as numbers higher than 30 cause problems for 32bit machines.
+```{r maxDepth}
+#T1 Error Rate
+predsForHam = predictions[ testDF$isSpam == "F" ]
+summary(predsForHam)
+sum(predsForHam == "T") / length(predsForHam)
+
+#TII Error Rate
+predsForSpam = predictions[ testDF$isSpam == "T" ]
+sum(predsForSpam == "F") / length(predsForSpam)
+
+maxDepthBest = 1:30
+
+fits = lapply(maxDepthBest, function(x) {
+  rpartObj = rpart(isSpam ~ ., data = trainDF,
+                   method="class", 
+                   control = rpart.control(maxdepth = x))
+  
+  predict(rpartObj, 
+          newdata = testDF[ , names(testDF) != "isSpam"],
+          type = "class")
+})
+
+spam = testDF$isSpam == "T"
+numSpam = sum(spam)
+numHam = sum(!spam)
+errs = sapply(fits, function(preds) {
+  typeI = sum(preds[ !spam ] == "T") / numHam
+  typeII = sum(preds[ spam ] == "F") / numSpam
+  c(typeI = typeI, typeII = typeII)
+})
+
+
+pdf("maxDepthIandII.pdf", width = 8, height = 7)
+
+cols = brewer.pal(9, "Set1")[c(3, 4, 5)]
+plot(errs[1,] ~ maxDepthBest, type="l", col=cols[2], 
+     lwd = 2, ylim = c(0,0.4), xlim = c(0,30), 
+     ylab="Error", xlab="maxDepth Values")
+points(errs[2,] ~ maxDepthBest, type="l", col=cols[1], lwd = 2)
+
+text(x =c(3, 5), y = c(0.12, 0.01), 
+     labels=c("Type II Error", "Type I Error"))
+
+minI = which(errs[1,] == min(errs[1,]))[1]
+abline(v = maxDepthBest[minI], col ="grey", lty =3, lwd=2)
+
+text(0.0007, errs[1, minI]+0.01, 
+     formatC(errs[1, minI], digits = 2))
+text(0.0007, errs[2, minI]+0.01, 
+     formatC(errs[2, minI], digits = 3))
+dev.off()
+```
+   Here we see that the best Type I error rate occurs at a maxdepth level of 3.  However, since the tree is so short the Type II rate is unacceptably high.  The best balance occurs at a value of 8 which makes sense since that is the number of levels our original tree had.  Anything above that is pointless since the tree will only ever go to those 8 levels.  
