@@ -1,0 +1,233 @@
+---
+title: "JHerrera_MPayne_RLagrois_week8casestudySec403WebScraping"
+author: "Joshua Herrera"
+date: "March 6, 2018"
+output: html_document
+---
+
+# Abstract
+
+# Introduction
+
+# Methods
+
+### Web Scraping
+
+```{r, echo = FALSE}
+setwd("G:/JoshuaData/Classes/MSDS7333 Quantifying the World/Week 8")
+
+library(XML)
+
+ubase = "http://www.cherryblossom.org/"
+url = paste(ubase, "results/1999/cb99m.html", sep = "")
+
+
+URLSuffixM = 
+  c("results/1999/cb99m.html", "results/2000/Cb003m.htm", "results/2001/oof_m.html",
+    "results/2002/oofm.htm", "results/2003/CB03-M.HTM",
+    "results/2004/men.htm", "results/2005/CB05-M.htm", 
+    "results/2006/men.htm", "results/2007/men.htm", 
+    "results/2008/men.htm", "results/2009/09cucb-M.htm",
+    "results/2010/2010cucb10m-m.htm", 
+    "results/2011/2011cucb10m-m.htm",
+    "results/2012/2012cucb10m-m.htm")
+
+MenURLs = paste(ubase, URLSuffixM, sep = "")
+
+URLSuffixF = 
+  c("results/1999/cb99m.html", "results/2000/Cb003f.htm", "results/2001/oof_f.html",
+    "results/2002/ooff.htm", "results/2003/CB03-F.HTM",
+    "results/2004/women.htm", "results/2005/CB05-F.htm", 
+    "results/2006/women.htm", "results/2007/women.htm", 
+    "results/2008/women.htm", "results/2009/09cucb-F.htm",
+    "results/2010/2010cucb10m-f.htm", 
+    "results/2011/2011cucb10m-f.htm",
+    "results/2012/2012cucb10m-f.htm")
+
+FemaleURLs = paste(ubase, URLSuffixF, sep = "")
+```
+
+  The first thing to do in this case study is to extract the data from the web. CherryBlossom.org contains the data that will be used in analysis. In order to scrape the website, we first locate the URLs which contain the race data and store them in a list. Then, we define the ExtractResTable function, which will scrape the data from the web-page, downloading it into a .txt file and putting it in a large list. The function uses many else if statements, which are necessary due to the slight format changes between years. The XML package is used to extract the first pre node found on the webpage, where the table is stored for most of the URLs. After extracting the entire table as a string, strsplit is used to seperate lines whereever \r\n is found, the code for new line in Windows, except in 1999, we stringsplit on \n, which is code for end-of-line for Unix systems. In 2000, the XML formatting was poor, so our normal method to search for the first pre node would not work. The table of data was stored in the fourth font element, so we told the xmlValue function to scrape it. The last exception we had to make was for the male 2009 page, where each entry to the overall table was its own pre node. The superior node to the pre nodes was stored and the xmlValue extractor function was applied to all pre nodes.
+
+```{r}
+extractResTable =
+  #
+  # Retrieve data from web site, 
+  # find the preformatted text,
+  # and write lines to return as a character vector.
+  #
+  function(url = "http://www.cherryblossom.org/results/1999/cb99m.html",
+           year = 1999, sex = "male", file = file)
+  {
+    doc = htmlParse(url)
+    
+    if (year == 2000) {
+      # Get preformatted text from 4th font element
+      # The top file is ill formed so the <pre> search doesn't work.
+      ff = getNodeSet(doc, "//font")
+      txt = xmlValue(ff[[4]])
+      els = strsplit(txt, "\r\n")[[1]]
+    }
+    else if (year == 2009 & sex == "male") {
+      # Get preformatted text from <div class="Section1"> element
+      # Each line of results is in a <pre> element
+      div1 = getNodeSet(doc, "//div[@class='Section1']")
+      pres = getNodeSet(div1[[1]], "//pre")
+      els = sapply(pres, xmlValue)
+    }
+    else if (year == 1999) {
+      # Get preformatted text from <pre> elements
+      pres = getNodeSet(doc, "//pre")
+      txt = xmlValue(pres[[1]])
+      els = strsplit(txt, "\n")[[1]] 
+    }
+    else {
+      # Get preformatted text from <pre> elements
+      pres = getNodeSet(doc, "//pre")
+      txt = xmlValue(pres[[1]])
+      els = strsplit(txt, "\r\n")[[1]]   
+    } 
+    
+    if (is.null(file)) return(els)
+    # Write the lines as a text file.
+    else 
+    writeLines(els, con = file)
+    return(els)
+  }
+```
+
+  This extractor function was then run on the male and female URLs using mapply. The function is fed a list of URLs and years, returning a large list containing 14 elements, one for each year. The data is also downloaded to the local working directory /MenTxt or /WomenTxt, which is how we will input the data in our next section. After downloading the data, we double-check the data is correct and well formatted by appling the length function to each year's table. We see that there are no errors in the data, and we are good to proceed.
+
+
+```{r, echo = FALSE}
+years = 1999:2012
+```
+```{r}
+#You must have a MenTxt folder in your working directory!!
+menTables = mapply(extractResTable, url = MenURLs, year = years, file=paste(getwd(),"/MenTxt/", years, ".txt", sep = ""))
+names(menTables) = years
+sapply(menTables, length)
+
+#You must have a WomenTxt folder in your working directory!!
+womenTables = mapply(extractResTable, url = FemaleURLs, year = years, sex = rep("female", 14), file=paste(getwd(),"/WomenTxt/", years, ".txt", sep = ""))
+names(womenTables) = years
+sapply(womenTables, length)
+```
+
+### Data Cleaning
+
+### Data Exploration Analysis
+```{r Setup, echo=TRUE, eval=TRUE, include=FALSE}
+setwd("D:/SMU/qtw/case4")
+getwd()
+library(ggplot2)
+library(RColorBrewer)
+library(dplyr)
+library(Hmisc)
+library(car)
+
+#Load in DFs
+load("cbWomen.rda")
+summary(cbWomen)
+str(cbWomen)
+
+load("cbmen.rda")
+summary(cbmen)
+str(cbmen)
+
+#Remove remaining NAs for colored boxplot
+wData = cbWomen %>% mutate(year = year) %>%
+  group_by(year) %>%
+  filter(!is.na(age)) %>%
+  mutate(med_age = median(age))
+
+mData = cbmen %>% mutate(year = year) %>%
+  group_by(year) %>%
+  filter(!is.na(age)) %>%
+  mutate(med_age = median(age))
+```
+  
+  Before starting analysis the necessary libraries must be loaded in as well as the cleaned up dataframes from above.  Despite cleaning some NAs managed to slip by and are filtered out using the code directly below the loading of the dataframes.  While these small number of NAs didn't cause widespread problems, it was found they were an issue for the boxplots colored by median which will be displayed below.  
+  
+```{r QQ Plots, echo=TRUE}
+#QQ Plots
+qqnorm(cbWomen$age, main = "Normal QQ Plot: Women's Age", ylab = "Age")
+qqline(cbWomen$age)
+
+qqnorm(cbmen$age, main = "Normal QQ Plot: Men's Age", ylab = "Age")
+qqline(cbmen$age)
+```
+
+  First QQ plots were generated for both men and women's ages plotted against a theortical normal distribution.  Both plots show the distribution of age deviates from normal though the women more heavily.  The women's distribution appears to be right skewed meaning most runners tended to be young though there were older participants than would be expected under a normal distribution.  The men's QQ plot is closer to a normal age distribution with only a slight right skew.   
+
+```{r Point Boxplot, include=FALSE}
+#box plots ages by year
+#Women, points with quantile lines
+boxY <- scale_y_continuous(name= "Age", breaks = seq(5, 90, 5), limits=c(5,90))
+boxX <- scale_x_discrete(name="Year")
+wBox <- ggplot(wData, aes(x = factor(year), y = age)) + geom_point(alpha=0.3) +
+  stat_summary(fun.data = "median_hilow",  color = "blue", geom="crossbar", mapping = aes(group=year))
+wBox <- wBox + boxY + boxX + ggtitle("Boxplot of Ages by Year: Women") + theme(plot.title = element_text(hjust = 0.5))
+wBox
+
+#men points with quantile lines
+mboxY <- scale_y_continuous(name= "Age", breaks = seq(5, 90, 5), limits=c(5,90))
+mboxX <- scale_x_discrete(name="Year")
+mBox <- ggplot(mData, aes(x = factor(year), y = age)) + geom_point(alpha=0.3) +
+  stat_summary(fun.data = "median_hilow",  color = "darkgreen", geom="crossbar", mapping = aes(group=year))
+mBox <- mBox + mboxY + mboxX + ggtitle("Boxplot of Ages by Year: Men") + theme(plot.title = element_text(hjust = 0.5))
+mBox
+```
+
+```{r Median Colored Plots, echo=TRUE, message=FALSE, warning=FALSE}
+#women colored by median
+wBox2 <- ggplot(wData, aes(x=factor(year), y=age, fill=med_age)) + geom_boxplot()
+wBox2 <- wBox2 + boxY + boxX + ggtitle("Boxplot of Ages by Year: Women") + theme(plot.title = element_text(hjust = 0.5))
+wBox2
+
+#men colored by median
+mBox2 <- ggplot(mData, aes(x=factor(year), y=age, fill=med_age)) + geom_boxplot(aes(fill=med_age, group=year), 
+  color = "black")
+mBox2 <- mBox2 + mboxY + mboxX + ggtitle("Boxplot of Ages by Year: Men") + 
+  theme(plot.title = element_text(hjust = 0.5)) + scale_fill_gradient(high="darkolivegreen1", low="darkgreen")
+mBox2
+```
+
+  Next boxplots were generated which were colored according to the median age.  This makes it easy to spot the trend present in both the men's and women's participants.  As time goes on the median age drops.  This trend is slower and more progressive among the men with 2009 finally hitting the floor and seeming to level off.  In the women however, there is a pronounced drop off after 1999 with a more gradual decline until around 2006 when it too begins to level off.
+```{r Density Plots 1, echo=TRUE, eval=FALSE, include=FALSE}
+#Density Plots
+#women point with density lines
+wDen2 <- ggplot(cbWomen, aes(x=year, y=age)) + geom_point(size=1) + geom_density_2d(size=1) + 
+  ggtitle("Density of Ages by Year: Women") + theme(plot.title = element_text(hjust = 0.5))
+wDen2
+#men points with density lines
+mDen2 <- ggplot(cbmen, aes(x=year, y=age)) + geom_point(size=1) + geom_density_2d(color="darkgreen", size=1) + 
+  ggtitle("Density of Ages by Year: Men") + theme(plot.title = element_text(hjust = 0.5))
+mDen2
+```
+
+```{r Density Plots 2, echo=TRUE, message=FALSE, warning=FALSE}
+
+#women year lines
+wDen <- ggplot(cbWomen, aes(x=age)) + geom_density(aes(group=year, color=year)) + 
+  ggtitle("Density of Ages by Year: Women") + theme(plot.title = element_text(hjust = 0.5))
+wDen
+
+#men year lines
+mDen <- ggplot(cbmen, aes(x=age)) + geom_density(aes(group=year, color=year)) + 
+  ggtitle("Density of Ages by Year: Men") + theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_color_gradient(high="darkolivegreen3", low="gray8")
+mDen
+```
+
+  To confirm the above results density plots were men and women were created.  The same trend of age getting lower as time goes on is visible as well as the underlying skew in the data.  The later years have thinner, higher peaks centered lower on the x-axis indicating a larger proportion of the runners in those years were younger. The extreme change between 1999 and 2000 is also clearly visible for the women. 
+
+# Results and Conclusions
+
+  Both sexes have seen a drop in the age of people who participate in the run.  In the early years the median age for both men and women was at or near 40.  Since then the median age has gotten younger.  However, this change has been more extreme for women, both in rapidity and overall change.  Between 1999 and 2000 there was a sudden drop in the age of participants.  From there it continued to decline up to a difference of nearly 10 years.  The men, by comparison, saw a slower and less extreme decline of roughly 5 years from 1999 to 2006.  This likely has led to an increase in the competitiveness of the run and could be indicative of an overall changing nature to the race. 
+
+# Future Work
+
+  The focus of future work should be on the results of these changes and perhaps the underlying causes.  For example, how has this changed the performance of the runners.  Also, how has the population of runners changed; are people traveling from further away to participate while it tended to be a more local affair in the past?  Has the race increased in prestige causing more young and serious runners to participate?  It would also be interesting to see if this trend has continued into current years and examine those questions for the race as it stands today.
+
+# References

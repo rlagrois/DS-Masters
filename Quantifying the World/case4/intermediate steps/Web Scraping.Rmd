@@ -1,0 +1,125 @@
+---
+title: "JHerrera_MPayne_RLagrois_week8casestudySec403WebScraping"
+author: "Joshua Herrera"
+date: "March 6, 2018"
+output: html_document
+---
+
+# Abstract
+
+# Introduction
+
+# Methods
+
+### Web Scraping
+
+```{r, echo = FALSE}
+setwd("G:/JoshuaData/Classes/MSDS7333 Quantifying the World/Week 8")
+
+library(XML)
+
+ubase = "http://www.cherryblossom.org/"
+url = paste(ubase, "results/1999/cb99m.html", sep = "")
+
+
+URLSuffixM = 
+  c("results/1999/cb99m.html", "results/2000/Cb003m.htm", "results/2001/oof_m.html",
+    "results/2002/oofm.htm", "results/2003/CB03-M.HTM",
+    "results/2004/men.htm", "results/2005/CB05-M.htm", 
+    "results/2006/men.htm", "results/2007/men.htm", 
+    "results/2008/men.htm", "results/2009/09cucb-M.htm",
+    "results/2010/2010cucb10m-m.htm", 
+    "results/2011/2011cucb10m-m.htm",
+    "results/2012/2012cucb10m-m.htm")
+
+MenURLs = paste(ubase, URLSuffixM, sep = "")
+
+URLSuffixF = 
+  c("results/1999/cb99m.html", "results/2000/Cb003f.htm", "results/2001/oof_f.html",
+    "results/2002/ooff.htm", "results/2003/CB03-F.HTM",
+    "results/2004/women.htm", "results/2005/CB05-F.htm", 
+    "results/2006/women.htm", "results/2007/women.htm", 
+    "results/2008/women.htm", "results/2009/09cucb-F.htm",
+    "results/2010/2010cucb10m-f.htm", 
+    "results/2011/2011cucb10m-f.htm",
+    "results/2012/2012cucb10m-f.htm")
+
+FemaleURLs = paste(ubase, URLSuffixF, sep = "")
+```
+
+  The first thing to do in this case study is to extract the data from the web. CherryBlossom.org contains the data that will be used in analysis. In order to scrape the website, we first locate the URLs which contain the race data and store them in a list. Then, we define the ExtractResTable function, which will scrape the data from the web-page, downloading it into a .txt file and putting it in a large list. The function uses many else if statements, which are necessary due to the slight format changes between years. The XML package is used to extract the first pre node found on the webpage, where the table is stored for most of the URLs. After extracting the entire table as a string, strsplit is used to seperate lines whereever \r\n is found, the code for new line in Windows, except in 1999, we stringsplit on \n, which is code for end-of-line for Unix systems. In 2000, the XML formatting was poor, so our normal method to search for the first pre node would not work. The table of data was stored in the fourth font element, so we told the xmlValue function to scrape it. The last exception we had to make was for the male 2009 page, where each entry to the overall table was its own pre node. The superior node to the pre nodes was stored and the xmlValue extractor function was applied to all pre nodes.
+
+```{r}
+extractResTable =
+  #
+  # Retrieve data from web site, 
+  # find the preformatted text,
+  # and write lines to return as a character vector.
+  #
+  function(url = "http://www.cherryblossom.org/results/1999/cb99m.html",
+           year = 1999, sex = "male", file = file)
+  {
+    doc = htmlParse(url)
+    
+    if (year == 2000) {
+      # Get preformatted text from 4th font element
+      # The top file is ill formed so the <pre> search doesn't work.
+      ff = getNodeSet(doc, "//font")
+      txt = xmlValue(ff[[4]])
+      els = strsplit(txt, "\r\n")[[1]]
+    }
+    else if (year == 2009 & sex == "male") {
+      # Get preformatted text from <div class="Section1"> element
+      # Each line of results is in a <pre> element
+      div1 = getNodeSet(doc, "//div[@class='Section1']")
+      pres = getNodeSet(div1[[1]], "//pre")
+      els = sapply(pres, xmlValue)
+    }
+    else if (year == 1999) {
+      # Get preformatted text from <pre> elements
+      pres = getNodeSet(doc, "//pre")
+      txt = xmlValue(pres[[1]])
+      els = strsplit(txt, "\n")[[1]] 
+    }
+    else {
+      # Get preformatted text from <pre> elements
+      pres = getNodeSet(doc, "//pre")
+      txt = xmlValue(pres[[1]])
+      els = strsplit(txt, "\r\n")[[1]]   
+    } 
+    
+    if (is.null(file)) return(els)
+    # Write the lines as a text file.
+    else 
+    writeLines(els, con = file)
+    return(els)
+  }
+```
+
+  This extractor function was then run on the male and female URLs using mapply. The function is fed a list of URLs and years, returning a large list containing 14 elements, one for each year. The data is also downloaded to the local working directory /MenTxt or /WomenTxt, which is how we will input the data in our next section. After downloading the data, we double-check the data is correct and well formatted by appling the length function to each year's table. We see that there are no errors in the data, and we are good to proceed.
+
+
+```{r, echo = FALSE}
+years = 1999:2012
+```
+```{r}
+#You must have a MenTxt folder in your working directory!!
+menTables = mapply(extractResTable, url = MenURLs, year = years, file=paste(getwd(),"/MenTxt/", years, ".txt", sep = ""))
+names(menTables) = years
+sapply(menTables, length)
+
+#You must have a WomenTxt folder in your working directory!!
+womenTables = mapply(extractResTable, url = FemaleURLs, year = years, sex = rep("female", 14), file=paste(getwd(),"/WomenTxt/", years, ".txt", sep = ""))
+names(womenTables) = years
+sapply(womenTables, length)
+```
+
+### Data Cleaning
+
+### Data Exploration Analysis
+
+# Results and Conclusions
+
+# Future Work
+
+# References
