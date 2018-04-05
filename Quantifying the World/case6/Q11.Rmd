@@ -1,0 +1,417 @@
+---
+title: "JHerrera_MPayne_RLagrois_week12casestudySec403"
+author: "Joshua Herrera"
+date: "April 3, 2018"
+output: html_document
+---
+
+
+
+  Branching processes are a type of stochastic (probabilistic) model. Simulating a branching process can provide insight into how parallel computing functions. Parallel computing is the process of breaking up programs into smaller jobs that can be run at the same time. Branching process can be used to model the way that parallel computing handles tasks. Sometimes a process must wait for another process to complete before it can run. Processes can also spawn child processes. Each process has a creation (birth) time and completion (death) time. We create a simulated branching process for multiple generations and explore the family tree created by this probabilistic model. We changed the exptOne function to include an argument that limits generations based on their mean.  This exploratory analysis revealed that doing so limits the number of generations produced while still matching the expected Poisson distribution. 
+
+#Introduction
+  Simulating a random branching process is not particularly complex, but it requires input parameters and a probabilistic way to model those parameters. Parameter lambda is the rate of process creation. Kappa is the rate of process completion. The branching process lifecycle can be simulated using these two rates and the Poisson process to create a probabilistic model. 
+  
+  Once we have simulated a branching process, we are able to explore and analyze the process using visualizations. By following the steps outlined in Nolan and Lang Chapter 7, we construct a branching process and family tree. A family tree models not just the offspring for one job, but for many generations of child and parent processes.  
+
+
+#Methods
+Integration with Remy's work
+
+  This case study is built upon three functions which are used in conjunction to generate our summary statistics for a family tree. The first function we need is called genKidsV, which generates children while the parent nodes are still alive. It accepts two vectorized lists of bTimes and cTimes, which are of the same length. Each entry in these lists corresponds to the birth and death times of a parent node. The parentID parameter is an identifier used to show from which parent the offspring were derrived from. Lambda affects the number of children generated through poisson distribution; where a higher lambda equates to more children. Kappa is the rate parameter for the exponential distribution; where higher kappa equates to longer child lifetimes. The function returns a data-frame containing the birth and completion times of the children generated through the function, as well as which parent each child belonged to. Each pair of entries to the bTimes and cTimes parameters is a parent.
+  
+```{R }
+genKidsV = function(bTimes, cTimes, parentID, lambda = 0.5, kappa = 0.3) {
+  # Determine how many children each job has
+  parentAge = cTimes - bTimes
+  numKids = rpois(n = length(parentAge), lambda = lambda * parentAge)
+  if (sum(numKids) == 0) return(NULL)
+  
+  # Determine the birth times of the children  
+  kidStats = 
+    mapply(function(n, min, max) {
+      births = sort(runif(n, min, max))
+      runtimes = rexp(n, rate = kappa)
+      completes = rep(max, n) + runtimes
+      data.frame(births, completes)
+    },
+    n = numKids , min = bTimes, max = cTimes, 
+    SIMPLIFY = FALSE)
+  
+  
+  return(data.frame(parentID = rep(parentID, numKids),
+                    kidID = 1:sum(numKids), 
+                    births = unlist(lapply(kidStats, "[[", "births")), 
+                    completes = unlist(lapply(kidStats,"[[", "completes"))
+  ))
+}
+```
+
+  The next function defined for our case study is the familyTree function, which generates a list of data-frames containing each generation until the tree either dies, or is terminated. The termination locations are defined as two new parameters to this function. The maxGen parameter is used to stop the function when 10 generations have been reached. The maxOffspring parameter is used to stop the function when one generation contains, by default, 1,000 children. Both of these stops are in place because although a tree may have less than 10 generations, the number of children can increase exponentially, and in another scenario even though there may not be 1,000 offspring on one generation, a tree can continue on indefinitely as long as the children spawns are occuring optimally.
+
+```{R}
+familyTree = function(lambda = 0.5, kappa = 0.3, 
+                      maxGen = 10, maxOffspring = 1000) {
+  
+  # Return value - a list with 1 data frame per generation.
+  allGens = vector(mode = "list", length = maxGen)
+  
+  # Generate root of the tree
+  allGens[[1]] = data.frame(parentID = NA, kidID = 1, 
+                            births = 0, 
+                            completes = rexp(1, rate = kappa))
+  
+  currentNumOffspring = 0
+  
+  # Generate future generations, one at a time.
+  for (i in 2:maxGen) {
+    nextGen = genKidsV(bTimes = allGens[[ (i - 1) ]]$births,
+                       cTimes = allGens[[ (i - 1) ]]$completes,
+                       parentID = allGens[[ (i - 1) ]]$kidID,
+                       lambda = lambda, kappa = kappa)
+    if (is.null(nextGen)) return(allGens[ 1:(i - 1) ]) 
+    allGens[[ i ]] = nextGen
+    currentNumOffspring = currentNumOffspring + nrow(nextGen)
+    if (currentNumOffspring > maxOffspring) 
+      return(allGens[1:i])
+  }  
+  allGens
+}
+```
+
+  The last function we define is a helper function. The exptOne function calls the familyTree function and generates summary statistics on it. This function accepts four abbreviated parameters: lambda, kappa, maxGen, and maxOffspring. All of these parameters work as explained before. The base version of this function returns the number of generations in a family tree, and the total number of offspring generated throughout the tree's lifetime. We will be expanding upon this function to increase its functionality and provide even more summary statistics.
+
+```{R eval=FALSE}
+exptOne = function(l, k, mG, mO){
+  aTree = familyTree(lambda = l, kappa = k, maxGen = mG,
+                     maxOffspring = mO)
+  numGen = length(aTree)
+  numJobs = sum(sapply(aTree, nrow))
+  c(numGen, numJobs)
+}
+```
+  Next we changed the exptOne function to accept mean generation (meanGen) time as an argument.  This forced the familyTree function to only accept runs with a mean generation time of 0.1. The familyTree, genKidsV were edited accordingly to accept the new parameter.  The MCBA function was also changed in order to generate the necessary plot.
+```{r}
+familyTree = function(lambda = 0.5, kappa = 0.3, 
+                      maxGen = 10, maxOffspring = 1000) {
+  
+  # Return value - a list with 1 data frame per generation.
+  allGens = vector(mode = "list", length = maxGen)
+  
+  # Generate root of the tree
+  allGens[[1]] = data.frame(parentID = NA, kidID = 1, 
+                            births = 0, 
+                            completes = rexp(1, rate = kappa))
+  
+  currentNumOffspring = 0
+  
+  # Generate future generations, one at a time.
+  for (i in 2:maxGen) {
+    nextGen = genKidsV(bTimes = allGens[[ (i - 1) ]]$births,
+                       cTimes = allGens[[ (i - 1) ]]$completes,
+                       parentID = allGens[[ (i - 1) ]]$kidID,
+                       lambda = lambda, kappa = kappa)
+    if (is.null(nextGen)) return(allGens[ 1:(i - 1) ]) 
+    allGens[[ i ]] = nextGen
+    currentNumOffspring = currentNumOffspring + nrow(nextGen)
+    if (currentNumOffspring > maxOffspring) 
+      return(allGens[1:i])
+  }  
+  allGens
+}
+genKidsV = function(bTimes, cTimes, parentID, lambda = 0.5, kappa = 0.3) {
+  # Determine how many children each job has
+  parentAge = cTimes - bTimes
+  numKids = rpois(n = length(parentAge), lambda = lambda * parentAge)
+  if (sum(numKids) == 0) return(NULL)
+  
+  # Determine the birth times of the children  
+  kidStats = 
+    mapply(function(n, min, max) {
+      births = sort(runif(n, min, max))
+      runtimes = rexp(n, rate = kappa)
+      #Find mean generation time
+      meanGen = mean(runtimes)
+      completes = rep(max, n) + runtimes
+      data.frame(births, completes)
+    },
+    n = numKids , min = bTimes, max = cTimes, 
+    SIMPLIFY = FALSE)
+  
+  
+  return(data.frame(parentID = rep(parentID, numKids),
+                    kidID = 1:sum(numKids), 
+                    births = unlist(lapply(kidStats, "[[", "births")), 
+                    completes = unlist(lapply(kidStats,"[[", "completes"))
+          ))
+  cat(meanGen)
+  return(meanGen)
+  
+}
+
+familyTree = function(lambda = 0.5, kappa = 0.3, 
+                      maxGen = 10, maxOffspring = 1000, meanGen) {
+  
+  # Return value - a list with 1 data frame per generation.
+  allGens = vector(mode = "list", length = maxGen)
+  
+  # Generate root of the tree
+  allGens[[1]] = data.frame(parentID = NA, kidID = 1, 
+                            births = 0, 
+                            completes = rexp(1, rate = kappa))
+  
+  currentNumOffspring = 0
+  
+  # Generate future generations, one at a time.
+  for (i in 2:maxGen) {
+    nextGen = genKidsV(bTimes = allGens[[ (i - 1) ]]$births,
+                       cTimes = allGens[[ (i - 1) ]]$completes,
+                       parentID = allGens[[ (i - 1) ]]$kidID,
+                       lambda = lambda, kappa = kappa)
+    if (is.null(nextGen)) return(allGens[ 1:(i - 1) ]) 
+    allGens[[ i ]] = nextGen
+    currentNumOffspring = currentNumOffspring + nrow(nextGen)
+    
+    if (currentNumOffspring > maxOffspring || meanGen == meanGen) 
+      return(allGens[1:i])
+    }  
+  allGens
+}
+
+exptOne = function(l, k, mG, mO, meanGen){
+  aTree = familyTree(lambda = l, kappa = k, maxGen = mG,
+                     maxOffspring = mO, meanGen = meanGen)
+  numGen = length(aTree)
+  numJobs = sum(sapply(aTree, nrow))
+  c(numGen, numJobs)
+}
+
+
+
+
+```
+
+#Results
+```{r include=FALSE}
+genKidsV = function(bTimes, cTimes, parentID, lambda = 0.5, kappa = 0.3) {
+  # Determine how many children each job has
+  parentAge = cTimes - bTimes
+  numKids = rpois(n = length(parentAge), lambda = lambda * parentAge)
+  if (sum(numKids) == 0) return(NULL)
+  
+  # Determine the birth times of the children  
+  kidStats = 
+    mapply(function(n, min, max) {
+      births = sort(runif(n, min, max))
+      runtimes = rexp(n, rate = kappa)
+      completes = rep(max, n) + runtimes
+      data.frame(births, completes)
+    },
+    n = numKids , min = bTimes, max = cTimes, 
+    SIMPLIFY = FALSE)
+  
+  
+  return(data.frame(parentID = rep(parentID, numKids),
+                    kidID = 1:sum(numKids), 
+                    births = unlist(lapply(kidStats, "[[", "births")), 
+                    completes = unlist(lapply(kidStats,"[[", "completes"))
+  ))
+}
+
+familyTree = function(lambda = 0.5, kappa = 0.3, 
+                      maxGen = 10, maxOffspring = 1000) {
+  
+  # Return value - a list with 1 data frame per generation.
+  allGens = vector(mode = "list", length = maxGen)
+  
+  # Generate root of the tree
+  allGens[[1]] = data.frame(parentID = NA, kidID = 1, 
+                            births = 0, 
+                            completes = rexp(1, rate = kappa))
+  
+  currentNumOffspring = 0
+  
+  # Generate future generations, one at a time.
+  for (i in 2:maxGen) {
+    nextGen = genKidsV(bTimes = allGens[[ (i - 1) ]]$births,
+                       cTimes = allGens[[ (i - 1) ]]$completes,
+                       parentID = allGens[[ (i - 1) ]]$kidID,
+                       lambda = lambda, kappa = kappa)
+    if (is.null(nextGen)) return(allGens[ 1:(i - 1) ]) 
+    allGens[[ i ]] = nextGen
+    currentNumOffspring = currentNumOffspring + nrow(nextGen)
+    if (currentNumOffspring > maxOffspring) 
+      return(allGens[1:i])
+  }  
+  allGens
+}
+
+exptOne = function(l, k, mG, mO){
+  aTree = familyTree(lambda = l, kappa = k, maxGen = mG,
+                     maxOffspring = mO)
+  numGen = length(aTree)
+  numJobs = sum(sapply(aTree, nrow))
+  c(numGen, numJobs)
+}
+
+```
+
+
+```{R}
+seed = 12212013
+set.seed(seed)
+exptOne(1, 0.5, 100, 1000)
+```
+
+  The exptOne function is called upon using a lambda of 1, a kappa of .5, 100 maximum generations, and 1000 maximum offspring within a generation. This family tree happened to contain 7 generations and 3,209 total offspring. It neither hit the generation stopper, nor the offspring stopper, so we conclude that this trial happened to die naturally.
+```{r include=FALSE}
+dist = list()
+
+genKidsV = function(bTimes, cTimes, parentID, lambda = 0.5, kappa = 0.3, dist = rnorm(n = 1)) {
+  # Determine how many children each job has
+  parentAge = cTimes - bTimes
+  numKids = rpois(n = length(parentAge), lambda = lambda * parentAge)
+  
+  dist = list("norm" = rnorm(n = 1), "log" = rlogis(n = 1),
+            "uni" = runif(n = 1))
+  dist2 = list( rnorm(n = length(parentAge)), "log" = rlogis(n = length(parentAge)), 
+                "uni" = runif(n = length(parentAge)))
+  modifyList(dist,dist2)
+  
+  if (sum(numKids) == 0) return(NULL)
+  
+  # Determine the birth times of the children  
+  kidStats = 
+    mapply(function(n, min, max) {
+      births = sort(runif(n, min, max))
+      runtimes = dist
+      completes = rep(max, n) + runtimes
+      data.frame(births, completes)
+    },
+    n = numKids , min = bTimes, max = cTimes, 
+    SIMPLIFY = FALSE)
+  
+  
+  return(data.frame(parentID = rep(parentID, numKids),
+                    kidID = 1:sum(numKids), 
+                    births = unlist(lapply(kidStats, "[[", "births")), 
+                    completes = unlist(lapply(kidStats,"[[", "completes"))
+  ))
+}
+
+familyTree = function(lambda = 0.5, kappa = 0.3, 
+                      maxGen = 10, maxOffspring = 1000, dist) {
+  
+  dist = list("norm" = rnorm(n = 1), "log" = rlogis(n = 1),
+            "uni" = runif(n = 1))
+  dist2 = list( rnorm(n = 1), "log" = rlogis(1), 
+                "uni" = runif(n = 1))
+  modifyList(dist,dist2)
+  
+  # Return value - a list with 1 data frame per generation.
+  allGens = vector(mode = "list", length = maxGen)
+  
+  # Generate root of the tree
+  allGens[[1]] = data.frame(parentID = NA, kidID = 1, 
+                            births = 0, 
+                            completes = dist)
+  
+  currentNumOffspring = 0
+  
+  # Generate future generations, one at a time.
+  for (i in 2:maxGen) {
+    nextGen = genKidsV(bTimes = allGens[[ (i - 1) ]]$births,
+                       cTimes = allGens[[ (i - 1) ]]$completes,
+                       parentID = allGens[[ (i - 1) ]]$kidID,
+                       lambda = lambda, kappa = kappa)
+    if (is.null(nextGen)) return(allGens[ 1:(i - 1) ]) 
+    allGens[[ i ]] = nextGen
+    currentNumOffspring = currentNumOffspring + nrow(nextGen)
+    if (currentNumOffspring > maxOffspring) 
+      return(allGens[1:i])
+  }  
+  allGens
+}
+
+treeGenKids = function(...) {
+  list("tree" = familyTree(dist), "kids" = genKidsV(dist))
+}
+
+mapply(treeGenKids, dist)
+
+```
+  
+```{r}
+seed2 = 12212013
+set.seed(seed2)
+
+exptOne(1, 0.5, 100, 1000, .1)
+```
+  Forcing the function to use a set mean time limits the generations to 2 with only 4 total offspring.  Clearly this parameter severly limits the ability of the trial to reach a natural conclusion.  Multiple values of meanGen values were tested ranging from 0.01 to 500 and all produced similar results.
+```{r}
+oldPar = par(mar = c(4.1, 4.1, 0.5, 0.5))
+seed1 = 12062013
+set.seed(seed1)
+g = familyTree(lambda = 0.4, kappa = 1, maxGen = 10, meanGen = .1)
+maxLife = max(sapply(g, function(gen) max(gen$completes)))
+numFamily = sum(sapply(g, nrow))
+plot(0,0, ylim = c(0.5, numFamily + 0.5), xlim = c(0, maxLife),
+     xlab = "Time", ylab = "", type ="n",
+     axes = FALSE)
+box()
+axis(1)
+numGen = length(g)
+numKids = sapply(g, nrow)
+treeN = g[ 2:(numGen + 1) ]
+birthNum = c(0, cumsum(sapply(g, nrow))[ -length(g)])
+axis(2, at = birthNum + 1, 
+     labels = paste("Gen", 1:numGen), tick = FALSE, las = 1)
+mapply(function(gen, nextGen, birthNum) {
+  birthOrder = birthNum + (1:nrow(gen))
+  segments(x0 = gen$births, x1 = gen$completes, y0 = birthOrder,
+           lwd = 3, col = "grey")
+  abline(h = 0.5 + max(birthOrder), lty = 2, col="black" )
+  if (all(!is.na(nextGen$births)))
+    points(x = nextGen$births, y = birthOrder[nextGen$parentID],
+           pch = 4)
+},
+gen = g, nextGen = treeN, birthNum = birthNum )
+par(oldPar)
+
+# Plot new Poison
+#Compute average number of offspring generated
+numKids = replicate(40, nrow(genKidsV(1, 6, parentID = NA)))
+numKids=unlist(numKids)
+mean(numKids)
+#Compute empirical probability vs poisson distribution for number of offspring
+eprobs = table(numKids)/length(numKids)
+probs = dpois(x = 0:max(numKids), lambda = 2.5)
+#Generate plots
+plot(eprobs, type = "h",
+     ylab = "Proportion", xlab = "Number of Offspring")
+segments(x0 = 0.1 + 0:max(numKids), y0 = rep(0, max(numKids)), 
+         y1 = probs, col="grey", lwd = 2)
+
+oldPar = par(mar = c(4.1, 4.1, 1, 1))
+
+plot(eprobs, type = "h",
+     ylab = "Proportion", xlab = "Number of Offspring")
+segments(x0 = 0.1 + 0:max(numKids), 
+         y0 = rep(0, max(numKids)), y1 = probs,
+         col="grey", lwd = 2)
+
+par(oldPar)
+dev.off()
+
+```
+  
+  The actual run times remain the same as the original generated by the book as can be seen by the family tree plot.  The birth times also remain the same.  However, limiting the mean prevented the second generation from spawning any more processes.  The distribution does is not as well matched with the Poisson distribution but is still close as would be expected since we aren't fundamentally changing the nature of the experiment.
+
+#Conclusion
+  Adding an argument to exptOne to only accept a certain meanGen resulted in a signifcant limiting of our simulations ability to produce new generations.  However, since the distribution remains close to the expected Poisson distribution it may still be viable to use for actual data as it may speed up the time to run the analysis.
+
+  The next step would be to apply this to actual exponential distributions of real data and compare the results of using a meanGen argument.  This would be the only real way to evaluate its effectiveness in a non simulation environment.
+
+
+
+

@@ -1,0 +1,171 @@
+---
+title: "JHerrera_MPayne_RLagrois_week12casestudySec403"
+author: "Joshua Herrera"
+date: "April 3, 2018"
+output: html_document
+---
+
+```{r include=FALSE}
+if(!require(ggplot2)){
+  install.packages("ggplot2")
+  library(ggplot2)
+}
+library(ggplot2)
+if(!require(ggalluvial)){
+  install.packages("ggalluvial")
+  library(ggalluvial)
+}
+library(ggalluvial)
+```
+
+#Abstract
+
+  Branching processes are a type of stochastic (probabilistic) model. Simulating a branching process can provide insight into how parallel computing functions. Parallel computing is the process of breaking up programs into smaller jobs that can be run at the same time. Branching process can be used to model the way that parallel computing handles tasks. Sometimes a process must wait for another process to complete before it can run. Processes can also spawn child processes. Each process has a creation (birth) time and completion (death) time. We create a simulated branching process for multiple generations and explore the family tree created by this probabilistic model. We created two different visualizations. First we show a plot indicating when process in a generation was running and when (if) it spawned children.  The second is an alluvial diagram which helps us understand the relationship between the parents, births, kids, and completes.   
+
+#Introduction
+
+  Simulating a random branching process is not particularly complex, but it requires input parameters and a probabilistic way to model those parameters. Parameter lambda is the rate of process creation. Kappa is the rate of process completion. The branching process lifecycle can be simulated using these two rates and the Poisson process to create a probabilistic model. 
+  
+  Once we have simulated a branching process, we are able to explore and analyze the process using visualizations. By following the steps outlined in Nolan and Lang Chapter 7, we construct a branching process and family tree. A family tree models not just the offspring for one job, but for many generations of child and parent processes.  It helps us understand the branching process temporally.   We also create an alluvial diagram which helps to illuminate relationships in the processes that the family tree model doesn't show.   
+
+
+#Methods
+
+  This case study is built upon three functions which are used in conjunction to generate our summary statistics for a family tree. The first function we need is called genKidsV, which generates children while the parent nodes are still alive. It accepts two vectorized lists of bTimes and cTimes, which are of the same length. Each entry in these lists corresponds to the birth and death times of a parent node. The parentID parameter is an identifier used to show from which parent the offspring were derrived from. Lambda affects the number of children generated through poisson distribution; where a higher lambda equates to more children. Kappa is the rate parameter for the exponential distribution; where higher kappa equates to longer child lifetimes. The function returns a data-frame containing the birth and completion times of the children generated through the function, as well as which parent each child belonged to. Each pair of entries to the bTimes and cTimes parameters is a parent.
+  
+```{R }
+genKidsV = function(bTimes, cTimes, parentID, lambda = 0.5, kappa = 0.3) {
+  # Determine how many children each job has
+  parentAge = cTimes - bTimes
+  numKids = rpois(n = length(parentAge), lambda = lambda * parentAge)
+  if (sum(numKids) == 0) return(NULL)
+  
+  # Determine the birth times of the children  
+  kidStats = 
+    mapply(function(n, min, max) {
+      births = sort(runif(n, min, max))
+      runtimes = rexp(n, rate = kappa)
+      completes = rep(max, n) + runtimes
+      data.frame(births, completes)
+    },
+    n = numKids , min = bTimes, max = cTimes, 
+    SIMPLIFY = FALSE)
+  
+  
+  return(data.frame(parentID = rep(parentID, numKids),
+                    kidID = 1:sum(numKids), 
+                    births = unlist(lapply(kidStats, "[[", "births")), 
+                    completes = unlist(lapply(kidStats,"[[", "completes"))
+  ))
+}
+```
+
+  This case study is built upon two functions which are used in conjunction to generate our family tree and alluvial diagram. The first function we need is called genKidsV, which generates children while the parent nodes are still alive. It accepts two vectorized lists of bTimes and cTimes, which are of the same length. Each entry in these lists corresponds to the birth and death times of a parent node. The parentID parameter is an identifier used to show from which parent the offspring were derrived from. Lambda affects the number of children generated through poisson distribution; where a higher lambda equates to more children. Kappa is the rate parameter for the exponential distribution; where higher kappa equates to longer child lifetimes. The function returns a data-frame containing the birth and completion times of the children generated through the function, as well as which parent each child belonged to. Each pair of entries to the bTimes and cTimes parameters is a parent.
+
+```{R}
+familyTree = function(lambda = 0.5, kappa = 0.3, 
+                      maxGen = 10, maxOffspring = 1000) {
+  
+  # Return value - a list with 1 data frame per generation.
+  allGens = vector(mode = "list", length = maxGen)
+  
+  # Generate root of the tree
+  allGens[[1]] = data.frame(parentID = NA, kidID = 1, 
+                            births = 0, 
+                            completes = rexp(1, rate = kappa))
+  
+  currentNumOffspring = 0
+  
+  # Generate future generations, one at a time.
+  for (i in 2:maxGen) {
+    nextGen = genKidsV(bTimes = allGens[[ (i - 1) ]]$births,
+                       cTimes = allGens[[ (i - 1) ]]$completes,
+                       parentID = allGens[[ (i - 1) ]]$kidID,
+                       lambda = lambda, kappa = kappa)
+    if (is.null(nextGen)) return(allGens[ 1:(i - 1) ]) 
+    allGens[[ i ]] = nextGen
+    currentNumOffspring = currentNumOffspring + nrow(nextGen)
+    if (currentNumOffspring > maxOffspring) 
+      return(allGens[1:i])
+  }  
+  allGens
+}
+```
+  
+  The next function defined for our case study is the familyTree function, which generates a list of data-frames containing each generation until the tree either dies, or is terminated. The termination locations are defined as two new parameters to this function. The maxGen parameter is used to stop the function when 10 generations have been reached. The maxOffspring parameter is used to stop the function when one generation contains, by default, 1,000 children. Both of these stops are in place because although a tree may have less than 10 generations, the number of children can increase exponentially, and in another scenario even though there may not be 1,000 offspring on one generation, a tree can continue on indefinitely as long as the children spawns are occuring optimally.
+
+#Results
+
+```{r}
+#Use familyTree and genKidsV to create the family tree plot
+oldPar = par(mar = c(4.1, 4.1, 0.5, 0.5))
+seed1 = 12062013
+set.seed(seed1)
+g = familyTree(lambda = 0.4, kappa = 1, maxGen = 10)
+maxLife = max(sapply(g, function(gen) max(gen$completes)))
+numFamily = sum(sapply(g, nrow))
+plot(0,0, ylim = c(0.5, numFamily + 0.5), xlim = c(0, maxLife),
+     xlab = "Time", ylab = "", type ="n",
+     axes = FALSE)
+box()
+axis(1)
+numGen = length(g)
+numKids = sapply(g, nrow)
+treeN = g[ 2:(numGen + 1) ]
+birthNum = c(0, cumsum(sapply(g, nrow))[ -length(g)])
+axis(2, at = birthNum + 1, 
+     labels = paste("Gen", 1:numGen), tick = FALSE, las = 1)
+mapply(function(gen, nextGen, birthNum) {
+  birthOrder = birthNum + (1:nrow(gen))
+  segments(x0 = gen$births, x1 = gen$completes, y0 = birthOrder,
+           lwd = 3, col = "grey")
+  abline(h = 0.5 + max(birthOrder), lty = 2, col="black" )
+  if (all(!is.na(nextGen$births)))
+    points(x = nextGen$births, y = birthOrder[nextGen$parentID],
+           pch = 4)
+},
+gen = g, nextGen = treeN, birthNum = birthNum )
+par(oldPar)
+
+```
+
+  The first plot we generate using the kidsGenV and familyTree functions is the family tree diagram.  The grey lines represent the time frame a proccess was running and in what generation on the Y-axis.  The black X's represent when a child process was born.  As would be expected later generations tend to occur and spawn children later in time.  However, there doesn't appear to be a relationship between between generation and the time it takes a job to complete.
+
+```{r}
+#Remove null data frame and merge remaining
+treeN <- treeN[1:3]
+treeN2 <- do.call("rbind", treeN)
+str(treeN2)
+#add birthnum to merged data frame
+birthNum = c(0, cumsum(sapply(g, nrow))[ -length(g)])
+treeN2[4] <- birthNum
+treeN2
+
+```
+
+
+
+```{r}
+# Use the dataframe from above to create the alluvial plot
+ggplot(as.data.frame(treeN2),
+       aes(weight = births,
+           axis1 = parentID, axis2 = kidID, axis3=completes)) +
+  geom_alluvium(aes(fill=kidID),
+                width=0,knot.pos = 0, reverse = F) +
+  guides(fill=F) +
+  geom_stratum(width = 1/8, reverse = FALSE) +
+  geom_text(stat = "stratum", label.strata = TRUE, reverse = FALSE) +
+  scale_x_continuous(breaks = 1:3, labels = c("parentID", "kidID", "completes")) +
+  coord_flip() +
+  ggtitle("Process Survival")
+```
+  
+  Next we use genKidsV and familyTree to create our alluvial diagram.  Each bar represents a job while the width is weighted on births; that is the wider the bar the more children that process spawned.  The bottom layer shows which process spawned that job while the second layer indicates the child process that came from that job.  Finally at the top we have the number of completes that process achieved.  Counter to what we may have thought there doesn't appear to be any bias towards the number of births and the number of completes nor for when the process was spawned.  Clearly there is a level of complexity we may not have expected if we had just looked at the family tree. 
+
+#Conclusion
+
+  Simulating a branching process is a relatively simple task.  Looking at the family tree plot we can see there is order to it, that is to say, it carries itself out linearly over time.  However, upon seeing the alluvial diagram we see that there is more complexity under the hood.  Indeed, branching processes can be a powerful tool in maximizing a machines computing power.  
+
+  In the future it would be highly desirable to use a branching process to analyze an actual data set instead of just running a simulation.  While this paper helped us understand the nature of branching processes it did not provide any real-world insights that we could use to make statements, predictions, or ask question about something happening around us.
+
+
