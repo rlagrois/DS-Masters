@@ -1,0 +1,60 @@
+ if(slidePOS >= 800 && slidePOS < 908){
+       if(checkPos >= 0 && checkPos < 10){
+         fill(0, 255, 0);
+         posiY = random(negY / 11, negY / 6);
+         ellipse(posiX, posiY, 2, 2);
+         sortCheck(posiY);
+        }
+    if(checkPos >= 10 && checkPos < 100){
+         fill(255, 230, 3);
+         posiY = random(negY / 3.25,  negY / 2.1);
+         ellipse(posiX, posiY, 2, 2);
+         sortCheck(posiY);
+        }
+    if(checkPos >= 100 && checkPos < 275){
+         fill(255, 0, 0);
+         posiY = random(negY / 1.8,  negY / 1.1);
+         ellipse(posiX, posiY, 2, 2);
+         sortCheck(posiY);
+        }
+    }
+    if(slidePOS >= 908){
+      if(checkPos >= 0 && checkPos < 10){
+         fill(0, 255, 0);
+         posiY = random(negY / 11, negY / 6);
+         ellipse(posiX, posiY, 2, 2);
+         sortCheck(posiY);
+        }
+      if(checkPos >= 10 && checkPos < 100){
+         fill(255, 230, 3);
+         posiY = random(negY / 10.75,  negY / 5.5);
+         ellipse(posiX, posiY, 2, 2);
+         sortCheck(posiY);
+        }
+      if(checkPos >= 100 && checkPos < 275){
+         fill(255, 0, 0);
+         posiY = random(negY / 10.7,  negY / 5);
+         ellipse(posiX, posiY, 2, 2);
+         sortCheck(posiY);
+        }
+    }
+    if(slidePOS >= 600 && slidePOS < 800){
+       if(checkPos >= 0 && checkPos < 10){
+         fill(0, 255, 0);
+         posiY = random(negY / 1.55, negY / 1.2);
+         ellipse(posiX, posiY, 2, 2);
+         sortCheck(posiY);
+        }
+      if(checkPos >= 10 && checkPos < 100){
+         fill(255, 230, 3);
+         posiY = random(negY / 1.5,  negY / 1.1);
+         ellipse(posiX, posiY, 2, 2);
+         sortCheck(posiY);
+        }
+      if(checkPos >= 100 && checkPos < 275){
+         fill(255, 0, 0);
+         posiY = random(negY / 1.3,  negY / 1.1);
+         ellipse(posiX, posiY, 2, 2);
+         sortCheck(posiY);
+        }
+    }

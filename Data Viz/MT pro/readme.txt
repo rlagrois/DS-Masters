@@ -1,0 +1,1 @@
+To reset the sort screen once the conditions have been changed just click and drag the blue box.
