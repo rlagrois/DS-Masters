@@ -1,0 +1,8 @@
+dept_name,max(salary)
+Biology,72000.00
+"Comp. Sci.",92000.00
+"Elec. Eng.",80000.00
+Finance,90000.00
+History,62000.00
+Music,40000.00
+Physics,95000.00
