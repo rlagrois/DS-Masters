@@ -1,0 +1,7 @@
+Name RecTime
+Jones 3.1
+Smith 3.6
+Harris 4.2
+McCulley 2.1
+Curtis 3.8
+Johnston 1.8
